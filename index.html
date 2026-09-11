@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Feud — AI survey party game</title>
+<style>
+  :root{
+    --stage-1:#08153f; --stage-2:#0f2270; --panel:#16308f; --panel-edge:#2749c9;
+    --slot:#0e245f; --slot-hi:#1c47b8; --gold:#f6c945; --gold-deep:#d99a1c;
+    --ink:#eaf0ff; --ink-dim:#9fb2e6; --red:#e5433c; --green:#3ec98a;
+    --shadow:0 18px 40px rgba(0,0,0,.45);
+    --display:"Arial Black","Helvetica Neue",Impact,system-ui,sans-serif;
+    --body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:var(--body);color:var(--ink);min-height:100%;-webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(1200px 700px at 50% -10%, #24409e 0%, rgba(36,64,158,0) 60%),
+      radial-gradient(900px 600px at 50% 120%, #0a1750 0%, rgba(10,23,80,0) 60%),
+      linear-gradient(180deg,var(--stage-2),var(--stage-1));}
+  button{font-family:var(--body);cursor:pointer;border:none}
+  input,select,textarea{font-family:var(--body)}
+  .wrap{max-width:1080px;margin:0 auto;padding:20px}
+  .mono{font-variant-numeric:tabular-nums}
+
+  .brand{font-family:var(--display);letter-spacing:.04em;line-height:.9}
+  .brand .big{font-size:clamp(56px,13vw,140px);color:var(--gold);
+    text-shadow:0 3px 0 var(--gold-deep),0 10px 24px rgba(0,0,0,.5);}
+  .brand .sub{color:var(--ink);font-size:clamp(13px,3.4vw,20px);letter-spacing:.28em;
+    font-family:var(--body);font-weight:700;margin-top:6px}
+
+  .home{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+  .home p.lede{max-width:46ch;color:var(--ink-dim);font-size:16px;line-height:1.55;margin:18px 0 30px}
+  .choices{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+  .card-btn{background:linear-gradient(180deg,var(--panel-edge),var(--panel));border:1px solid #3a5fe0;
+    border-radius:16px;padding:22px 26px;min-width:230px;color:var(--ink);text-align:left;box-shadow:var(--shadow);transition:transform .12s ease}
+  .card-btn:hover{transform:translateY(-3px)}
+  .card-btn b{display:block;font-size:20px;margin-bottom:4px}
+  .card-btn span{color:var(--ink-dim);font-size:13px;line-height:1.4}
+  .home .foot{margin-top:34px;color:var(--ink-dim);font-size:12.5px;max-width:54ch;line-height:1.5}
+
+  .topbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  .topbar .home-link{font-family:var(--display);color:var(--gold);font-size:26px;letter-spacing:.03em;background:none;padding:0}
+  .tabs{display:flex;gap:8px;background:rgba(0,0,0,.22);padding:6px;border-radius:999px}
+  .tab{background:none;color:var(--ink-dim);padding:9px 18px;border-radius:999px;font-weight:700;font-size:14px}
+  .tab.active{background:var(--gold);color:#241a00}
+  .spacer{flex:1}
+  .pill{background:rgba(0,0,0,.25);border:1px solid #33509f;border-radius:999px;padding:7px 14px;font-size:13px;color:var(--ink-dim)}
+  .pill b{color:var(--ink)}
+
+  .panel{background:linear-gradient(180deg,rgba(43,73,190,.35),rgba(16,37,95,.55));
+    border:1px solid #2f52c0;border-radius:18px;padding:20px;box-shadow:var(--shadow);margin-bottom:18px}
+  .panel h2{margin:0 0 4px;font-size:19px}
+  .panel .hint{color:var(--ink-dim);font-size:13.5px;margin:0 0 16px;line-height:1.5}
+
+  .field{display:flex;gap:10px;flex-wrap:wrap}
+  input.txt{flex:1;min-width:200px;background:#0b1a4e;border:1px solid #2f52c0;color:var(--ink);
+    border-radius:12px;padding:13px 15px;font-size:15px;outline:none}
+  input.txt:focus{border-color:var(--gold)}
+  select.sel{background:#0b1a4e;border:1px solid #2f52c0;color:var(--ink);border-radius:10px;padding:9px 12px;font-size:14px}
+  .btn{background:var(--gold);color:#241a00;font-weight:800;border-radius:12px;padding:13px 18px;font-size:15px;
+    box-shadow:0 6px 0 var(--gold-deep);transition:transform .06s ease,box-shadow .06s ease}
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 var(--gold-deep)}
+  .btn.ghost{background:rgba(255,255,255,.06);color:var(--ink);border:1px solid #3a5fe0;box-shadow:none}
+  .btn.red{background:var(--red);color:#fff;box-shadow:0 6px 0 #a52a25}
+  .btn.red:active{box-shadow:0 2px 0 #a52a25}
+  .btn.sm{padding:8px 12px;font-size:13px;box-shadow:none;border-radius:9px}
+  .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none}
+
+  .qrow{display:flex;align-items:center;gap:12px;background:rgba(0,0,0,.18);
+    border:1px solid #294ab0;border-radius:12px;padding:12px 14px;margin-top:10px;flex-wrap:wrap}
+  .qrow .qmain{flex:1;min-width:200px}
+  .qrow .qtext{font-size:15px}
+  .qrow .qprev{margin-top:6px}
+  .status{font-size:11px;font-weight:800;letter-spacing:.06em;padding:4px 9px;border-radius:999px;text-transform:uppercase}
+  .status.draft,.status.generating{background:#33509f;color:#cdd9ff}
+  .status.ready{background:var(--green);color:#052a1a}
+  .status.error{background:var(--red);color:#fff}
+  .tag{display:inline-block;background:rgba(0,0,0,.28);border:1px solid #33509f;border-radius:999px;
+    padding:3px 9px;font-size:11.5px;color:var(--ink-dim);margin:3px 4px 0 0}
+  .tag b{color:var(--gold)}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid #cdd9ff;border-top-color:transparent;
+    border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .board-head{text-align:center;margin:6px 0 20px}
+  .board-head .q{font-family:var(--display);font-size:clamp(22px,5vw,40px);color:var(--gold);
+    text-shadow:0 2px 0 var(--gold-deep);line-height:1.05;max-width:22ch;margin:0 auto}
+  .board{display:grid;grid-template-columns:1fr;gap:12px;max-width:760px;margin:0 auto}
+  @media(min-width:720px){.board{grid-template-columns:1fr 1fr}}
+  .slot{perspective:1000px;height:64px}
+  .slot .inner{position:relative;width:100%;height:100%;transition:transform .55s cubic-bezier(.2,.8,.2,1);transform-style:preserve-3d}
+  .slot.open .inner{transform:rotateX(180deg)}
+  .face{position:absolute;inset:0;backface-visibility:hidden;border-radius:12px;display:flex;align-items:center;
+    border:1px solid var(--slot-hi);background:linear-gradient(180deg,var(--slot-hi),var(--slot));
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.12)}
+  .front{justify-content:center}
+  .front .num{font-family:var(--display);font-size:30px;color:var(--gold);text-shadow:0 2px 0 var(--gold-deep)}
+  .back{transform:rotateX(180deg);justify-content:space-between;padding:0 4px 0 16px}
+  .back .atext{font-family:var(--display);font-size:clamp(15px,3.4vw,22px);letter-spacing:.02em;color:#fff;
+    text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .back .pts{font-family:var(--display);font-size:24px;min-width:56px;height:100%;display:flex;align-items:center;
+    justify-content:center;background:var(--panel);color:var(--gold);border-left:2px solid var(--slot-hi);border-radius:0 11px 11px 0}
+  .slot.host{cursor:pointer}
+  .slot.host:hover .face{outline:2px solid var(--gold)}
+
+  /* host control board — the leader always sees the answers */
+  .ctrl-board{display:grid;grid-template-columns:1fr;gap:10px;max-width:760px;margin:0 auto}
+  @media(min-width:720px){.ctrl-board{grid-template-columns:1fr 1fr}}
+  .ctrl-card{display:flex;align-items:center;gap:12px;text-align:left;width:100%;border-radius:12px;
+    padding:12px 14px;font-family:var(--body);color:var(--ink);border:1px dashed #3f63d6;
+    background:rgba(0,0,0,.24);cursor:pointer;transition:transform .06s ease,border-color .1s ease}
+  .ctrl-card:hover{border-color:var(--gold)}
+  .ctrl-card:active{transform:scale(.99)}
+  .ctrl-card .cnum{font-family:var(--display);font-size:22px;color:var(--ink-dim);min-width:26px;text-align:center}
+  .ctrl-card .cans{flex:1;font-family:var(--display);font-size:clamp(15px,3vw,20px);text-transform:uppercase;color:#fff;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ctrl-card .cpts{font-family:var(--display);font-size:22px;color:var(--ink-dim);min-width:38px;text-align:right}
+  .ctrl-card .cstate{font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--ink-dim);
+    min-width:92px;text-align:right;text-transform:uppercase}
+  .ctrl-card.shown{border:1px solid var(--gold);background:linear-gradient(180deg,rgba(246,201,69,.18),rgba(246,201,69,.05))}
+  .ctrl-card.shown .cnum,.ctrl-card.shown .cpts,.ctrl-card.shown .cstate{color:var(--gold)}
+  .team.control{outline:2px solid var(--gold)}
+  .team .ctl{display:block;font-size:10px;color:var(--gold);letter-spacing:.05em;font-weight:800;margin-top:2px}
+
+  .scorebar{display:flex;align-items:stretch;gap:14px;max-width:760px;margin:0 auto 20px}
+  .team{flex:1;background:rgba(0,0,0,.22);border:1px solid #2f52c0;border-radius:14px;padding:12px 14px;text-align:center}
+  .team .name{font-size:12px;color:var(--ink-dim);letter-spacing:.05em;font-weight:700}
+  .team .score{font-family:var(--display);font-size:40px;color:var(--gold);text-shadow:0 2px 0 var(--gold-deep)}
+  .pot{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:120px;
+    background:linear-gradient(180deg,var(--gold),var(--gold-deep));color:#241a00;border-radius:14px;padding:10px}
+  .pot .lbl{font-size:11px;font-weight:800;letter-spacing:.08em}
+  .pot .val{font-family:var(--display);font-size:40px;line-height:1}
+  .strikes{display:flex;justify-content:center;gap:16px;min-height:70px;align-items:center;margin:6px 0 18px}
+  .xmark{font-family:var(--display);font-size:56px;color:var(--red);text-shadow:0 3px 0 #8f221d;animation:pop .25s ease}
+  @keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
+
+  .row-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+  .switchrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+  .subtle{color:var(--ink-dim);font-size:13px}
+  .center{text-align:center}
+  .warn{background:rgba(229,67,60,.15);border:1px solid var(--red);color:#ffd7d4;border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.5;margin-bottom:16px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ============================================================
+   FEUD — AI-simulated survey party game
+   Host builds questions (AI simulates the crowd & tallies the board).
+   A second "board screen" mirrors the game for the room to watch.
+   ============================================================ */
+
+/* ---------- shared cloud storage (survives reloads, syncs screens) ---------- */
+const HAS_STORE = !!(window.storage && window.storage.get);
+const mem = new Map();
+const store = {
+  async get(k){ if(!HAS_STORE) return mem.get(k)||null;
+    try{ const r=await window.storage.get(k,true); return r?JSON.parse(r.value):null; }catch(e){ return null; } },
+  async set(k,v){ if(!HAS_STORE){ mem.set(k,v); return; }
+    try{ await window.storage.set(k,JSON.stringify(v),true); }catch(e){ console.error('set',e); } },
+};
+const K_QUESTIONS='feud:questions', K_GAME='feud:game';
+
+function freshGame(){ return { activeQid:null, mode:'idle', revealed:[], strikes:0,
+  scoreA:0, scoreB:0, pot:0, teamA:'Team Blue', teamB:'Team Gold', control:null }; }
+async function getGame(){ return (await store.get(K_GAME))||freshGame(); }
+async function setGame(g){ await store.set(K_GAME,g); }
+async function getQuestions(){ return (await store.get(K_QUESTIONS))||[]; }
+async function setQuestions(q){ await store.set(K_QUESTIONS,q); }
+
+/* ---------- AI: simulate a survey and return the ranked board ---------- */
+async function callClaude(prompt){
+  const res=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+  });
+  const data=await res.json();
+  return (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+}
+function stripJson(t){ return t.replace(/```json/gi,'').replace(/```/g,'').trim(); }
+async function aiBoard(question,N,maxA){
+  const prompt=`You are simulating a Family Feud style survey. Imagine you asked ${N} everyday people this question and tallied their answers into the most common groups. Return ONLY a JSON array of the top ${maxA} answers, most popular first: [{"text":"ANSWER","count":N}]. "count" is how many of the ${N} people gave that answer (positive integers, sorted descending, summing to no more than ${N}). Keep each answer 1-4 words, uppercase, the kind of concise answer that fits on a game board. No prose, JSON only.\n\nQuestion: ${question}`;
+  const out=await callClaude(prompt);
+  const arr=JSON.parse(stripJson(out));
+  return arr.map(a=>({text:String(a.text).trim().toUpperCase(),count:Math.max(1,Math.round(Number(a.count)||1))}))
+            .filter(a=>a.text).slice(0,maxA);
+}
+
+/* ---------- helpers ---------- */
+const app=document.getElementById('app');
+const $=s=>document.querySelector(s);
+const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+
+/* ---------- sound (synth) ---------- */
+let AC=null;
+function ac(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } return AC; }
+function tone(f,d,t='sine',w=0,g=.2){ const c=ac(); if(!c)return;
+  const o=c.createOscillator(),gain=c.createGain(); o.type=t;o.frequency.value=f;o.connect(gain);gain.connect(c.destination);
+  const s=c.currentTime+w; gain.gain.setValueAtTime(g,s); gain.gain.exponentialRampToValueAtTime(.0001,s+d); o.start(s);o.stop(s+d);}
+const sfx={ ding(){tone(660,.12,'sine',0,.25);tone(880,.28,'sine',.1,.25);},
+  buzz(){tone(150,.5,'square',0,.22);tone(110,.5,'square',0,.18);}, blip(){tone(520,.08,'triangle',0,.15);} };
+
+/* ============================================================ ROUTER ============================================================ */
+let view='home';        // home | host | board
+let hostTab='questions'; // questions | play
+let boardSig='';
+
+function go(v){ view=v; render(); }
+function render(){ if(view==='home')return renderHome(); if(view==='host')return renderHost(); if(view==='board')return renderBoardScreen(); }
+
+/* ---------------- HOME ---------------- */
+function renderHome(){
+  app.innerHTML=`
+  <div class="home">
+    <div class="brand"><div class="big">FEUD</div><div class="sub">AI SURVEY SHOWDOWN</div></div>
+    <p class="lede">Write a question and the game surveys a virtual crowd, tallies the answers, and builds the board for you. Then split into teams and play.</p>
+    <div class="choices">
+      <button class="card-btn" id="beHost"><b>Host the game &rarr;</b><span>Create questions, generate boards, and run the round with full controls.</span></button>
+      <button class="card-btn" id="beBoard"><b>Board screen &rarr;</b><span>Open on a TV or second screen — shows the board and scores as the host plays.</span></button>
+    </div>
+    ${HAS_STORE?'':'<div class="foot" style="color:#ffd7d4">Shared storage isn\'t available here, so the board screen won\'t mirror the host. Open this as a Claude artifact for the two-screen setup.</div>'}
+    <div class="foot">One person hosts from their device. The board screen is optional — use it if you want the room to watch answers flip up on a bigger display.</div>
+  </div>`;
+  $('#beHost').onclick=()=>{ ac(); go('host'); };
+  $('#beBoard').onclick=()=>{ ac(); go('board'); };
+}
+
+/* ============================================================ HOST ============================================================ */
+function renderHost(){
+  app.innerHTML=`
+  <div class="wrap">
+    <div class="topbar">
+      <button class="home-link" id="homeLink">FEUD</button>
+      <div class="tabs">
+        <button class="tab" data-tab="questions">Questions</button>
+        <button class="tab" data-tab="play">Play</button>
+      </div>
+      <div class="spacer"></div>
+      <span class="pill" id="hostStatus">&nbsp;</span>
+    </div>
+    <div id="hostContent"></div>
+  </div>`;
+  $('#homeLink').onclick=()=>go('home');
+  app.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ hostTab=t.dataset.tab; renderHostTab(); });
+  renderHostTab();
+}
+function renderHostTab(){
+  app.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===hostTab));
+  const c=$('#hostContent');
+  if(hostTab==='questions') buildQuestions(c); else buildPlay(c);
+}
+
+/* ---- Questions: create + auto-generate board ---- */
+async function buildQuestions(c){
+  c.innerHTML=`
+  <div class="panel">
+    <h2>Create a question</h2>
+    <p class="hint">Write it like you'd ask a room. The game simulates a survey of virtual people and tallies their answers into the board — you don't type answers yourself.</p>
+    <div class="field">
+      <input class="txt" id="qInput" placeholder="Name something people forget to pack for a trip." maxlength="140">
+      <button class="btn" id="qAdd">Add &amp; generate</button>
+    </div>
+    <div class="switchrow">
+      <label class="subtle">Survey size
+        <select class="sel" id="surveyN"><option>25</option><option>50</option><option>100</option></select>
+      </label>
+      <label class="subtle">Answers on board
+        <select class="sel" id="maxA"><option>5</option><option>6</option><option selected>7</option><option>8</option></select>
+      </label>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Your questions</h2>
+    <div id="qList"><p class="hint">Loading…</p></div>
+  </div>`;
+  const add=async()=>{
+    const v=$('#qInput').value.trim(); if(!v) return;
+    const N=+$('#surveyN').value, maxA=+$('#maxA').value;
+    const qs=await getQuestions();
+    const q={id:uid(),text:v,status:'generating',answers:[],surveyN:N,maxAnswers:maxA};
+    qs.push(q); await setQuestions(qs); $('#qInput').value=''; drawQList();
+    generate(q.id);
+  };
+  $('#qAdd').onclick=add;
+  $('#qInput').addEventListener('keydown',e=>{ if(e.key==='Enter') add(); });
+  drawQList();
+}
+async function generate(qid){
+  // re-fetch right before writes so parallel adds don't clobber each other
+  let qs=await getQuestions(); let q=qs.find(x=>x.id===qid); if(!q) return;
+  q.status='generating'; await setQuestions(qs); drawQList();
+  try{
+    const answers=await aiBoard(q.text,q.surveyN,q.maxAnswers);
+    qs=await getQuestions(); q=qs.find(x=>x.id===qid); if(!q) return;
+    q.answers=answers; q.status = answers.length?'ready':'error';
+    await setQuestions(qs); drawQList();
+  }catch(e){
+    qs=await getQuestions(); q=qs.find(x=>x.id===qid); if(q){ q.status='error'; await setQuestions(qs); drawQList(); }
+  }
+}
+async function drawQList(){
+  const box=$('#qList'); if(!box) return;
+  const qs=await getQuestions();
+  if(!qs.length){ box.innerHTML=`<p class="hint">No questions yet. Add your first one above and the board builds itself.</p>`; return; }
+  box.innerHTML=qs.map(q=>{
+    let statusHtml, prev='';
+    if(q.status==='generating') statusHtml=`<span class="status generating"><span class="spin"></span>surveying</span>`;
+    else statusHtml=`<span class="status ${q.status}">${q.status}</span>`;
+    if(q.status==='ready') prev=`<div class="qprev">${q.answers.map(a=>`<span class="tag">${esc(a.text)} <b>${a.count}</b></span>`).join('')}</div>`;
+    if(q.status==='error') prev=`<div class="qprev subtle" style="color:#ffd7d4">Couldn't generate — press Regenerate to try again.</div>`;
+    const playBtn = q.status==='ready' ? `<button class="btn sm" data-play="${q.id}">Play &rarr;</button>` : '';
+    const regen   = (q.status==='ready'||q.status==='error') ? `<button class="btn sm ghost" data-regen="${q.id}">Regenerate</button>` : '';
+    return `<div class="qrow">
+      <div class="qmain"><div class="qtext">${statusHtml} &nbsp;${esc(q.text)}</div>${prev}</div>
+      ${playBtn}${regen}
+      <button class="btn sm red" data-del="${q.id}">Delete</button>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{ let qs=await getQuestions(); qs=qs.filter(x=>x.id!==b.dataset.del); await setQuestions(qs); drawQList(); });
+  box.querySelectorAll('[data-regen]').forEach(b=>b.onclick=()=>generate(b.dataset.regen));
+  box.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>playQuestion(b.dataset.play));
+}
+async function playQuestion(qid){
+  const g=await getGame();
+  g.activeQid=qid; g.mode='play'; g.revealed=[]; g.strikes=0; g.pot=0;
+  await setGame(g); hostTab='play'; renderHostTab();
+}
+
+/* ---- Play: host board controls ---- */
+async function buildPlay(c){
+  const g=await getGame(); const qs=await getQuestions(); const q=qs.find(x=>x.id===g.activeQid);
+  if(!q||!q.answers.length){ c.innerHTML=`<div class="panel"><h2>No board loaded</h2><p class="hint">Go to <b>Questions</b>, create one (it builds its own board), then press <b>Play</b> on it.</p></div>`; return; }
+  c.innerHTML=`
+  <div class="panel">
+    <div class="board-head"><div class="q">${esc(q.text)}</div></div>
+    <div class="scorebar" id="scorebar"></div>
+    <div class="strikes" id="strikes"></div>
+    <p class="subtle center" style="margin-bottom:10px">Only you see these answers. Tap one to reveal it on the board screen the room is watching.</p>
+    <div class="ctrl-board" id="board"></div>
+    <div class="row-actions" style="margin-top:18px">
+      <button class="btn red" id="strikeBtn">Strike ✕</button>
+      <button class="btn ghost sm" id="clrStrike">Clear strikes</button>
+      <button class="btn ghost sm" id="revealAll">Reveal all</button>
+    </div>
+    <div class="switchrow" style="justify-content:center;margin-top:14px">
+      <span class="subtle">Board control:</span>
+      <button class="btn ghost sm" id="ctlA">Give to <span data-tn="A"></span></button>
+      <button class="btn ghost sm" id="ctlB">Give to <span data-tn="B"></span></button>
+    </div>
+    <div class="row-actions" style="margin-top:8px">
+      <button class="btn" id="awardA">Award pot to <span data-tn="A"></span></button>
+      <button class="btn" id="awardB">Award pot to <span data-tn="B"></span></button>
+    </div>
+    <div class="switchrow" style="justify-content:center;margin-top:14px">
+      <input class="txt" id="teamAName" style="max-width:170px" placeholder="Team A name">
+      <input class="txt" id="teamBName" style="max-width:170px" placeholder="Team B name">
+      <button class="btn ghost sm" id="saveTeams">Rename teams</button>
+      <button class="btn ghost sm" id="resetGame">Reset scores</button>
+    </div>
+    <p class="subtle center" style="margin-top:10px">Someone shouts an answer → tap it if it's on the board. No match → Strike. Tap a revealed card again to undo a misclick.</p>
+  </div>`;
+  $('#strikeBtn').onclick=async()=>{ const g=await getGame(); if(g.strikes<3){g.strikes++;await setGame(g);sfx.buzz();refreshPlay();} };
+  $('#clrStrike').onclick=async()=>{ const g=await getGame(); g.strikes=0; await setGame(g); refreshPlay(); };
+  $('#revealAll').onclick=async()=>{ const g=await getGame(); const qq=(await getQuestions()).find(x=>x.id===g.activeQid);
+    g.revealed=qq.answers.map((_,i)=>i); g.pot=qq.answers.reduce((s,a)=>s+a.count,0); await setGame(g); sfx.ding(); refreshPlay(); };
+  $('#awardA').onclick=()=>award('A'); $('#awardB').onclick=()=>award('B');
+  $('#ctlA').onclick=async()=>{ const g=await getGame(); g.control='A'; await setGame(g); refreshPlay(); };
+  $('#ctlB').onclick=async()=>{ const g=await getGame(); g.control='B'; await setGame(g); refreshPlay(); };
+  $('#saveTeams').onclick=async()=>{ const g=await getGame(); g.teamA=$('#teamAName').value.trim()||g.teamA; g.teamB=$('#teamBName').value.trim()||g.teamB; await setGame(g); refreshPlay(); };
+  $('#resetGame').onclick=async()=>{ const g=await getGame(); g.scoreA=0;g.scoreB=0;g.pot=0;g.revealed=[];g.strikes=0; await setGame(g); refreshPlay(); };
+  refreshPlay();
+}
+async function award(team){ const g=await getGame(); if(team==='A')g.scoreA+=g.pot; else g.scoreB+=g.pot; g.pot=0;g.revealed=[];g.strikes=0; await setGame(g); sfx.ding(); refreshPlay(); }
+async function toggleReveal(i){ const g=await getGame(); const q=(await getQuestions()).find(x=>x.id===g.activeQid); if(!q)return;
+  const idx=g.revealed.indexOf(i);
+  if(idx>=0){ g.revealed.splice(idx,1); g.pot=Math.max(0,g.pot-q.answers[i].count); sfx.blip(); }
+  else { g.revealed.push(i); g.pot+=q.answers[i].count; sfx.ding(); }
+  await setGame(g); refreshPlay(); }
+function hostBoardHTML(q,g){ return q.answers.map((a,i)=>{ const shown=g.revealed.includes(i);
+  return `<button class="ctrl-card ${shown?'shown':''}" data-i="${i}">
+    <span class="cnum">${i+1}</span><span class="cans">${esc(a.text)}</span>
+    <span class="cpts">${a.count}</span><span class="cstate">${shown?'shown ✓':'tap to reveal'}</span>
+  </button>`; }).join(''); }
+function scorebarHTML(g){ return `
+  <div class="team ${g.control==='A'?'control':''}"><div class="name">${esc(g.teamA)}${g.control==='A'?' <span class="ctl">▸ in control</span>':''}</div><div class="score mono">${g.scoreA}</div></div>
+  <div class="pot"><div class="lbl">POT</div><div class="val mono">${g.pot}</div></div>
+  <div class="team ${g.control==='B'?'control':''}"><div class="name">${esc(g.teamB)}${g.control==='B'?' <span class="ctl">▸ in control</span>':''}</div><div class="score mono">${g.scoreB}</div></div>`; }
+function boardHTML(q,g,host){ return q.answers.map((a,i)=>{ const open=g.revealed.includes(i);
+  return `<div class="slot ${host?'host ':''}${open?'open':''}" ${host?`data-i="${i}"`:''}><div class="inner">
+    <div class="face front"><span class="num">${i+1}</span></div>
+    <div class="face back"><span class="atext">${esc(a.text)}</span><span class="pts">${a.count}</span></div>
+  </div></div>`; }).join(''); }
+async function refreshPlay(){
+  if(view!=='host'||hostTab!=='play') return;
+  const g=await getGame(); const q=(await getQuestions()).find(x=>x.id===g.activeQid); if(!q) return;
+  const sb=$('#scorebar'); if(sb)sb.innerHTML=scorebarHTML(g);
+  const st=$('#strikes'); if(st)st.innerHTML='✕'.repeat(g.strikes).split('').map(()=>`<span class="xmark">✕</span>`).join('');
+  const bd=$('#board'); if(bd){ bd.innerHTML=hostBoardHTML(q,g); bd.querySelectorAll('.ctrl-card').forEach(s=>s.onclick=()=>toggleReveal(+s.dataset.i)); }
+  const ta=$('#teamAName'),tb=$('#teamBName');
+  if(ta&&document.activeElement!==ta)ta.value=g.teamA;
+  if(tb&&document.activeElement!==tb)tb.value=g.teamB;
+  app.querySelectorAll('[data-tn="A"]').forEach(e=>e.textContent=g.teamA);
+  app.querySelectorAll('[data-tn="B"]').forEach(e=>e.textContent=g.teamB);
+}
+async function refreshHostStatus(){ const el=$('#hostStatus'); if(!el)return; const g=await getGame();
+  el.innerHTML = g.mode==='play' ? 'Round live' : 'Ready'; }
+
+/* ============================================================ BOARD SCREEN ============================================================ */
+function renderBoardScreen(){
+  app.innerHTML=`
+  <div class="wrap">
+    <div class="topbar">
+      <button class="home-link" id="homeLink">FEUD</button>
+      <div class="spacer"></div>
+      <span class="pill">Board screen</span>
+    </div>
+    <div id="boardContent"></div>
+  </div>`;
+  $('#homeLink').onclick=()=>go('home');
+  boardSig=''; refreshBoardScreen();
+}
+async function refreshBoardScreen(){
+  if(view!=='board')return;
+  const g=await getGame(); const q=(await getQuestions()).find(x=>x.id===g.activeQid);
+  const sig=`${g.mode}|${g.activeQid}`; const c=$('#boardContent'); if(!c)return;
+  if(sig!==boardSig){
+    boardSig=sig;
+    if(g.mode==='play'&&q){
+      c.innerHTML=`<div class="panel">
+        <div class="board-head"><div class="q">${esc(q.text)}</div></div>
+        <div class="scorebar" id="bScore"></div><div class="strikes" id="bStrikes"></div>
+        <div class="board" id="bBoard"></div>
+        <p class="subtle center" style="margin-top:14px">Answers flip up as the host reveals them.</p>
+      </div>`;
+    } else { c.innerHTML=`<div class="panel center"><h2>Waiting for the host</h2><p class="hint">When the host starts a round, the board appears here for everyone to see.</p></div>`; }
+  }
+  if(g.mode==='play'&&q){
+    const sc=$('#bScore'); if(sc)sc.innerHTML=scorebarHTML(g);
+    const st=$('#bStrikes'); if(st)st.innerHTML='✕'.repeat(g.strikes).split('').map(()=>`<span class="xmark">✕</span>`).join('');
+    const bd=$('#bBoard'); if(bd)bd.innerHTML=boardHTML(q,g,false);
+  }
+}
+
+/* ============================================================ POLL ============================================================ */
+setInterval(()=>{ if(view==='host'){ refreshHostStatus(); if(hostTab==='play') refreshPlay(); } if(view==='board') refreshBoardScreen(); },1500);
+render();
+</script>
+</body>
+</html>
