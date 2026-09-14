@@ -219,10 +219,9 @@ function tone(f,d,t='sine',w=0,g=.2){ const c=ac(); if(!c)return;
   const o=c.createOscillator(),gain=c.createGain(); o.type=t;o.frequency.value=f;o.connect(gain);gain.connect(c.destination);
   const s=c.currentTime+w; gain.gain.setValueAtTime(g,s); gain.gain.exponentialRampToValueAtTime(.0001,s+d); o.start(s);o.stop(s+d);}
 
-/* Optional: drop ding.mp3 / buzzer.mp3 (sounds you have the rights to use) next to
-   this file in the repo and they'll play automatically; otherwise the built-in
-   generated sounds below are used. */
-const sampleURL={ ding:'ding.mp3', buzz:'buzzer.mp3' };
+/* Custom sounds live in the sound-file/ folder of the repo. Change the paths here
+   if you move or rename them; otherwise the built-in generated sounds are used. */
+const sampleURL={ ding:'sound-file/ding.mp3', buzz:'sound-file/buzzer.mp3' };
 const sampleOK={};
 function probeSample(name){ const url=sampleURL[name]; const a=new Audio();
   a.addEventListener('canplaythrough',()=>{ sampleOK[name]=url; },{once:true});
