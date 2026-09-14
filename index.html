@@ -221,11 +221,24 @@ function tone(f,d,t='sine',w=0,g=.2){ const c=ac(); if(!c)return;
 
 /* Custom sounds live in the sound-file/ folder of the repo. Change the paths here
    if you move or rename them; otherwise the built-in generated sounds are used. */
-const sampleURL={ ding:'sound-file/ding.mp3', buzz:'sound-file/buzzer.mp3' };
+/* Custom sounds: the game tries these locations in order and uses the first that
+   loads — so it works whether the files sit in sound-file/, sound-files/, or the
+   repo root. Otherwise the built-in generated sounds are used. */
+const sampleURL={
+  ding:['sound-file/ding.mp3','sound-files/ding.mp3','ding.mp3'],
+  buzz:['sound-file/buzzer.mp3','sound-files/buzzer.mp3','buzzer.mp3']
+};
 const sampleOK={};
-function probeSample(name){ const url=sampleURL[name]; const a=new Audio();
-  a.addEventListener('canplaythrough',()=>{ sampleOK[name]=url; },{once:true});
-  a.addEventListener('error',()=>{ sampleOK[name]=false; },{once:true}); a.src=url; }
+function probeSample(name){
+  const urls=sampleURL[name].slice();
+  (function tryNext(){
+    if(!urls.length){ sampleOK[name]=false; return; }
+    const url=urls.shift(); const a=new Audio();
+    a.addEventListener('canplaythrough',()=>{ sampleOK[name]=url; },{once:true});
+    a.addEventListener('error',tryNext,{once:true});
+    a.src=url;
+  })();
+}
 function playSample(name){ const url=sampleOK[name]; if(!url) return false;
   try{ const a=new Audio(url); a.volume=.9; a.play().catch(()=>{}); return true; }catch(e){ return false; } }
 probeSample('ding'); probeSample('buzz');
