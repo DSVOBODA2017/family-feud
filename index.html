@@ -212,14 +212,47 @@ const $=s=>document.querySelector(s);
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const uid=()=>Math.random().toString(36).slice(2,9);
 
-/* ---------- sound (synth) ---------- */
+/* ---------- sound ---------- */
 let AC=null;
 function ac(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } return AC; }
 function tone(f,d,t='sine',w=0,g=.2){ const c=ac(); if(!c)return;
   const o=c.createOscillator(),gain=c.createGain(); o.type=t;o.frequency.value=f;o.connect(gain);gain.connect(c.destination);
   const s=c.currentTime+w; gain.gain.setValueAtTime(g,s); gain.gain.exponentialRampToValueAtTime(.0001,s+d); o.start(s);o.stop(s+d);}
-const sfx={ ding(){tone(660,.12,'sine',0,.25);tone(880,.28,'sine',.1,.25);},
-  buzz(){tone(150,.5,'square',0,.22);tone(110,.5,'square',0,.18);}, blip(){tone(520,.08,'triangle',0,.15);} };
+
+/* Optional: drop ding.mp3 / buzzer.mp3 (sounds you have the rights to use) next to
+   this file in the repo and they'll play automatically; otherwise the built-in
+   generated sounds below are used. */
+const sampleURL={ ding:'ding.mp3', buzz:'buzzer.mp3' };
+const sampleOK={};
+function probeSample(name){ const url=sampleURL[name]; const a=new Audio();
+  a.addEventListener('canplaythrough',()=>{ sampleOK[name]=url; },{once:true});
+  a.addEventListener('error',()=>{ sampleOK[name]=false; },{once:true}); a.src=url; }
+function playSample(name){ const url=sampleOK[name]; if(!url) return false;
+  try{ const a=new Audio(url); a.volume=.9; a.play().catch(()=>{}); return true; }catch(e){ return false; } }
+probeSample('ding'); probeSample('buzz');
+
+/* built-in "yes" ding — a bright, celebratory two-note bell */
+function synthDing(){ const c=ac(); if(!c)return; const now=c.currentTime;
+  const hit=(t,base)=>[[1,.30],[2,.12],[2.76,.06]].forEach(([m,gain])=>{
+    const o=c.createOscillator(),g=c.createGain(); o.type='sine'; o.frequency.value=base*m;
+    o.connect(g); g.connect(c.destination);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gain,t+.005);
+    g.gain.exponentialRampToValueAtTime(.0001,t+.55); o.start(t); o.stop(t+.55); });
+  hit(now,784); hit(now+.13,1047); }
+/* built-in "no" buzzer — a harsh, low, detuned game-show buzz */
+function synthBuzz(){ const c=ac(); if(!c)return; const now=c.currentTime, dur=.75;
+  const master=c.createGain(); master.connect(c.destination);
+  master.gain.setValueAtTime(.0001,now); master.gain.linearRampToValueAtTime(.26,now+.02);
+  master.gain.setValueAtTime(.26,now+dur-.08); master.gain.exponentialRampToValueAtTime(.0001,now+dur);
+  [['sawtooth',150,.5],['sawtooth',150.8,.5],['square',75,.35]].forEach(([type,f,g])=>{
+    const o=c.createOscillator(),gg=c.createGain(); o.type=type;
+    o.frequency.setValueAtTime(f,now); o.frequency.linearRampToValueAtTime(f*.9,now+dur);
+    gg.gain.value=g; o.connect(gg); gg.connect(master); o.start(now); o.stop(now+dur); }); }
+const sfx={
+  ding(){ if(!playSample('ding')) synthDing(); },
+  buzz(){ if(!playSample('buzz')) synthBuzz(); },
+  blip(){ tone(520,.08,'triangle',0,.15); }
+};
 
 /* ============================================================ ROUTER ============================================================ */
 let view='home';        // home | host | board
@@ -227,7 +260,9 @@ let hostTab='questions'; // questions | play
 let editingId=null; let editRows=[];
 let boardSig='';
 
-function go(v){ view=v; render(); }
+function setHash(v){ const base=location.pathname+location.search; try{ history.replaceState(null,'', v==='home'?base:base+'#'+v); }catch(e){} }
+function go(v){ view=v; setHash(v); render(); }
+function openBoardWindow(){ window.open(location.pathname+location.search+'#board','feudBoard','width=1280,height=800'); }
 function render(){ if(view==='home')return renderHome(); if(view==='host')return renderHost(); if(view==='board')return renderBoardScreen(); }
 
 /* ---------------- HOME ---------------- */
@@ -257,11 +292,13 @@ function renderHost(){
         <button class="tab" data-tab="play">Play</button>
       </div>
       <div class="spacer"></div>
+      <button class="btn ghost sm" id="openBoard">⧉ Board window</button>
       <span class="pill" id="hostStatus">&nbsp;</span>
     </div>
     <div id="hostContent"></div>
   </div>`;
   $('#homeLink').onclick=()=>go('home');
+  $('#openBoard').onclick=openBoardWindow;
   app.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ hostTab=t.dataset.tab; editingId=null; renderHostTab(); });
   renderHostTab();
 }
@@ -414,12 +451,14 @@ async function buildPlay(c){
   <div class="panel">
     <div class="board-head"><div class="q">${esc(q.text)}</div></div>
     <div class="scorebar" id="scorebar"></div>
+    <div class="row-actions" style="margin-top:-8px;margin-bottom:8px"><button class="btn ghost sm" id="resetGame">Reset scores</button></div>
     <div class="strikes" id="strikes"></div>
     <p class="subtle center" style="margin-bottom:10px">Only you see these answers. Tap one to reveal it on the board screen the room is watching.</p>
     <div class="ctrl-board" id="board"></div>
     <div class="row-actions" style="margin-top:18px">
       <button class="btn red" id="strikeBtn">Strike ✕</button>
       <button class="btn ghost sm" id="clrStrike">Clear strikes</button>
+      <button class="btn ghost sm" id="clrBoard">Clear board</button>
       <button class="btn ghost sm" id="revealAll">Reveal all</button>
     </div>
     <div class="switchrow" style="justify-content:center;margin-top:14px">
@@ -435,12 +474,12 @@ async function buildPlay(c){
       <input class="txt" id="teamAName" style="max-width:170px" placeholder="Team A name">
       <input class="txt" id="teamBName" style="max-width:170px" placeholder="Team B name">
       <button class="btn ghost sm" id="saveTeams">Rename teams</button>
-      <button class="btn ghost sm" id="resetGame">Reset scores</button>
     </div>
     <p class="subtle center" style="margin-top:10px">Someone shouts an answer → tap it if it's on the board. No match → Strike. Tap a revealed card again to undo a misclick.</p>
   </div>`;
   $('#strikeBtn').onclick=async()=>{ const g=await getGame(); if(g.strikes<3){g.strikes++;await setGame(g);sfx.buzz();refreshPlay();} };
   $('#clrStrike').onclick=async()=>{ const g=await getGame(); g.strikes=0; await setGame(g); refreshPlay(); };
+  $('#clrBoard').onclick=async()=>{ const g=await getGame(); g.revealed=[]; g.pot=0; g.strikes=0; await setGame(g); refreshPlay(); };
   $('#revealAll').onclick=async()=>{ const g=await getGame(); const qq=(await getQuestions()).find(x=>x.id===g.activeQid);
     g.revealed=qq.answers.map((_,i)=>i); g.pot=qq.answers.reduce((s,a)=>s+a.count,0); await setGame(g); sfx.ding(); refreshPlay(); };
   $('#awardA').onclick=()=>award('A'); $('#awardB').onclick=()=>award('B');
@@ -529,7 +568,7 @@ window.addEventListener('storage',(e)=>{
 });
 setInterval(()=>{ if(view==='host'){ refreshHostStatus(); if(hostTab==='play') refreshPlay(); } if(view==='board') refreshBoardScreen(); },1500);
 
-(async()=>{ await ensureSeed(); render(); })();
+(async()=>{ await ensureSeed(); const h=(location.hash||'').replace('#',''); if(h==='board'||h==='host')view=h; render(); })();
 </script>
 </body>
 </html>
