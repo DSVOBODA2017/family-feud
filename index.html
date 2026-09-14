@@ -266,11 +266,31 @@ const sfx={
   blip(){ tone(520,.08,'triangle',0,.15); }
 };
 
+/* Browsers block audio until the user interacts with a window. This unlocks it
+   on the first click/keypress so the board screen can play sounds on its own. */
+let audioUnlocked=false;
+function unlockAudio(){ if(audioUnlocked) return; audioUnlocked=true;
+  try{ const c=ac(); if(c&&c.state==='suspended') c.resume(); }catch(e){}
+  ['ding','buzz'].forEach(n=>{ const u=sampleOK[n]; if(u){ try{ const a=new Audio(u); a.volume=0; a.play().then(()=>a.pause()).catch(()=>{}); }catch(e){} } });
+  const h=document.getElementById('soundHint'); if(h) h.remove(); }
+window.addEventListener('pointerdown',unlockAudio);
+window.addEventListener('keydown',unlockAudio);
+
+/* The board window announces itself (and whether its sound is on) so the host
+   knows whether to stay silent and let the board play the effects instead. */
+const BOARD_BEAT='feud:boardbeat', BOARD_AUDIO='feud:boardaudio';
+function beat(){ try{ localStorage.setItem(BOARD_BEAT,String(Date.now())); if(audioUnlocked) localStorage.setItem(BOARD_AUDIO,String(Date.now())); }catch(e){} }
+function boardAudioAlive(){ try{ return (Date.now()-Number(localStorage.getItem(BOARD_AUDIO)||0))<4000; }catch(e){ return false; } }
+function hostSound(kind){ if(boardAudioAlive()) return; sfx[kind] && sfx[kind](); }
+function soundLabel(){ const d=sampleOK['ding'], b=sampleOK['buzz'];
+  if(d===undefined||b===undefined) return '♪ checking…';
+  return (d&&b) ? '♪ your sounds' : '♪ built-in'; }
+
 /* ============================================================ ROUTER ============================================================ */
 let view='home';        // home | host | board
 let hostTab='questions'; // questions | play
 let editingId=null; let editRows=[];
-let boardSig='';
+let boardSig=''; let bPrevRevealed=0, bPrevStrikes=0;
 
 function setHash(v){ const base=location.pathname+location.search; try{ history.replaceState(null,'', v==='home'?base:base+'#'+v); }catch(e){} }
 function go(v){ view=v; setHash(v); render(); }
@@ -489,11 +509,11 @@ async function buildPlay(c){
     </div>
     <p class="subtle center" style="margin-top:10px">Someone shouts an answer → tap it if it's on the board. No match → Strike. Tap a revealed card again to undo a misclick.</p>
   </div>`;
-  $('#strikeBtn').onclick=async()=>{ const g=await getGame(); if(g.strikes<3){g.strikes++;await setGame(g);sfx.buzz();refreshPlay();} };
+  $('#strikeBtn').onclick=async()=>{ const g=await getGame(); if(g.strikes<3){g.strikes++;await setGame(g);hostSound('buzz');refreshPlay();} };
   $('#clrStrike').onclick=async()=>{ const g=await getGame(); g.strikes=0; await setGame(g); refreshPlay(); };
   $('#clrBoard').onclick=async()=>{ const g=await getGame(); g.revealed=[]; g.pot=0; g.strikes=0; await setGame(g); refreshPlay(); };
   $('#revealAll').onclick=async()=>{ const g=await getGame(); const qq=(await getQuestions()).find(x=>x.id===g.activeQid);
-    g.revealed=qq.answers.map((_,i)=>i); g.pot=qq.answers.reduce((s,a)=>s+a.count,0); await setGame(g); sfx.ding(); refreshPlay(); };
+    g.revealed=qq.answers.map((_,i)=>i); g.pot=qq.answers.reduce((s,a)=>s+a.count,0); await setGame(g); hostSound('ding'); refreshPlay(); };
   $('#awardA').onclick=()=>award('A'); $('#awardB').onclick=()=>award('B');
   $('#ctlA').onclick=async()=>{ const g=await getGame(); g.control='A'; await setGame(g); refreshPlay(); };
   $('#ctlB').onclick=async()=>{ const g=await getGame(); g.control='B'; await setGame(g); refreshPlay(); };
@@ -501,11 +521,11 @@ async function buildPlay(c){
   $('#resetGame').onclick=async()=>{ const g=await getGame(); g.scoreA=0;g.scoreB=0;g.pot=0;g.revealed=[];g.strikes=0;g.control=null; await setGame(g); refreshPlay(); };
   refreshPlay();
 }
-async function award(team){ const g=await getGame(); if(team==='A')g.scoreA+=g.pot; else g.scoreB+=g.pot; g.pot=0;g.revealed=[];g.strikes=0; await setGame(g); sfx.ding(); refreshPlay(); }
+async function award(team){ const g=await getGame(); if(team==='A')g.scoreA+=g.pot; else g.scoreB+=g.pot; g.pot=0;g.revealed=[];g.strikes=0; await setGame(g); hostSound('ding'); refreshPlay(); }
 async function toggleReveal(i){ const g=await getGame(); const q=(await getQuestions()).find(x=>x.id===g.activeQid); if(!q)return;
   const idx=g.revealed.indexOf(i);
   if(idx>=0){ g.revealed.splice(idx,1); g.pot=Math.max(0,g.pot-q.answers[i].count); sfx.blip(); }
-  else { g.revealed.push(i); g.pot+=q.answers[i].count; sfx.ding(); }
+  else { g.revealed.push(i); g.pot+=q.answers[i].count; hostSound('ding'); }
   await setGame(g); refreshPlay(); }
 function scorebarHTML(g){ return `
   <div class="team ${g.control==='A'?'control':''}"><div class="name">${esc(g.teamA)}${g.control==='A'?' <span class="ctl">▸ in control</span>':''}</div><div class="score mono">${g.scoreA}</div></div>
@@ -534,7 +554,7 @@ async function refreshPlay(){
   app.querySelectorAll('[data-tn="B"]').forEach(e=>e.textContent=g.teamB);
 }
 async function refreshHostStatus(){ const el=$('#hostStatus'); if(!el)return; const g=await getGame();
-  el.innerHTML = g.mode==='play' ? 'Round live' : 'Ready'; }
+  el.innerHTML = (g.mode==='play' ? 'Round live' : 'Ready') + ' · <span class="subtle">'+soundLabel()+'</span>'; }
 
 /* ============================================================ BOARD SCREEN ============================================================ */
 function renderBoardScreen(){
@@ -543,8 +563,10 @@ function renderBoardScreen(){
     <div class="topbar">
       <button class="home-link" id="homeLink">FEUD</button>
       <div class="spacer"></div>
+      <span class="pill" id="soundPill">♪ …</span>
       <span class="pill">Board screen</span>
     </div>
+    <div id="soundHint" style="text-align:center;margin:6px 0 -6px;color:var(--ink-dim);font-size:13px">🔊 Click anywhere once to turn on sound for this screen.</div>
     <div id="boardContent"></div>
   </div>`;
   $('#homeLink').onclick=()=>go('home');
@@ -552,10 +574,12 @@ function renderBoardScreen(){
 }
 async function refreshBoardScreen(){
   if(view!=='board')return;
+  beat();
   const g=await getGame(); const q=(await getQuestions()).find(x=>x.id===g.activeQid);
   const sig=`${g.mode}|${g.activeQid}`; const c=$('#boardContent'); if(!c)return;
   if(sig!==boardSig){
     boardSig=sig;
+    bPrevRevealed=(g.revealed||[]).length; bPrevStrikes=g.strikes||0;   // baseline: no sound on (re)load
     if(g.mode==='play'&&q){
       c.innerHTML=`<div class="panel">
         <div class="board-head"><div class="q">${esc(q.text)}</div></div>
@@ -566,10 +590,16 @@ async function refreshBoardScreen(){
     } else { c.innerHTML=`<div class="panel center"><h2>Waiting for the host</h2><p class="hint">When the host starts a round, the board appears here for everyone to see.</p></div>`; }
   }
   if(g.mode==='play'&&q){
+    if(audioUnlocked){
+      if(g.revealed.length>bPrevRevealed) sfx.ding();
+      if(g.strikes>bPrevStrikes) sfx.buzz();
+    }
+    bPrevRevealed=g.revealed.length; bPrevStrikes=g.strikes;
     const sc=$('#bScore'); if(sc)sc.innerHTML=scorebarHTML(g);
     const st=$('#bStrikes'); if(st)st.innerHTML='✕'.repeat(g.strikes).split('').map(()=>`<span class="xmark">✕</span>`).join('');
     const bd=$('#bBoard'); if(bd)bd.innerHTML=audienceBoardHTML(q,g);
   }
+  const sp=$('#soundPill'); if(sp) sp.textContent=soundLabel();
 }
 
 /* ============================================================ SYNC ============================================================ */
