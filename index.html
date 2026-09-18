@@ -509,7 +509,9 @@ async function buildPlay(c){
     </div>
     <p class="subtle center" style="margin-top:10px">Someone shouts an answer → tap it if it's on the board. No match → Strike. Tap a revealed card again to undo a misclick.</p>
   </div>`;
-  $('#strikeBtn').onclick=async()=>{ const g=await getGame(); if(g.strikes<3){g.strikes++;await setGame(g);hostSound('buzz');refreshPlay();} };
+  $('#strikeBtn').onclick=async()=>{ const g=await getGame(); if(g.strikes<3){ g.strikes++;
+    if(g.strikes===3 && (g.control==='A'||g.control==='B')) g.control = g.control==='A'?'B':'A';
+    await setGame(g); hostSound('buzz'); refreshPlay(); } };
   $('#clrStrike').onclick=async()=>{ const g=await getGame(); g.strikes=0; await setGame(g); refreshPlay(); };
   $('#clrBoard').onclick=async()=>{ const g=await getGame(); g.revealed=[]; g.pot=0; g.strikes=0; await setGame(g); refreshPlay(); };
   $('#revealAll').onclick=async()=>{ const g=await getGame(); const qq=(await getQuestions()).find(x=>x.id===g.activeQid);
