@@ -545,7 +545,9 @@ function hostBoardHTML(q,g){ return q.answers.map((a,i)=>{ const shown=g.reveale
 function renderStrikes(el,n){ if(!el) return; const cur=el.childElementCount; if(cur===n) return;
   if(n===0){ el.innerHTML=''; return; }
   if(n<cur){ el.innerHTML=Array.from({length:n},()=>'<span class="xmark" style="animation:none">✕</span>').join(''); return; }
-  for(let i=cur;i<n;i++){ const s=document.createElement('span'); s.className='xmark'; s.textContent='✕'; el.appendChild(s); } }
+  for(let i=cur;i<n;i++){ const s=document.createElement('span'); s.className='xmark'; s.textContent='✕';
+    s.addEventListener('animationend',()=>{ s.style.animation='none'; },{once:true});
+    el.appendChild(s); } }
 async function refreshPlay(){
   if(view!=='host'||hostTab!=='play') return;
   const g=await getGame(); const q=(await getQuestions()).find(x=>x.id===g.activeQid); if(!q) return;
