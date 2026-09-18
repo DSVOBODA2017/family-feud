@@ -325,7 +325,6 @@ function renderHost(){
       </div>
       <div class="spacer"></div>
       <button class="btn ghost sm" id="openBoard">⧉ Board window</button>
-      <span class="pill" id="hostStatus">&nbsp;</span>
     </div>
     <div id="hostContent"></div>
   </div>`;
@@ -531,7 +530,7 @@ async function toggleReveal(i){ const g=await getGame(); const q=(await getQuest
   await setGame(g); refreshPlay(); }
 function scorebarHTML(g){ return `
   <div class="team ${g.control==='A'?'control':''}"><div class="name">${esc(g.teamA)}${g.control==='A'?' <span class="ctl">▸ in control</span>':''}</div><div class="score mono">${g.scoreA}</div></div>
-  <div class="pot"><div class="lbl">POT</div><div class="val mono">${g.pot}</div></div>
+  <div class="pot"><div class="lbl">Points</div><div class="val mono">${g.pot}</div></div>
   <div class="team ${g.control==='B'?'control':''}"><div class="name">${esc(g.teamB)}${g.control==='B'?' <span class="ctl">▸ in control</span>':''}</div><div class="score mono">${g.scoreB}</div></div>`; }
 function audienceBoardHTML(q,g){ return q.answers.map((a,i)=>{ const open=g.revealed.includes(i);
   return `<div class="slot ${open?'open':''}"><div class="inner">
@@ -569,8 +568,6 @@ function renderBoardScreen(){
     <div class="topbar">
       <button class="home-link" id="homeLink">FEUD</button>
       <div class="spacer"></div>
-      <span class="pill" id="soundPill">♪ …</span>
-      <span class="pill">Board screen</span>
     </div>
     <div id="soundHint" style="text-align:center;margin:6px 0 -6px;color:var(--ink-dim);font-size:13px">🔊 Click anywhere once to turn on sound for this screen.</div>
     <div id="boardContent"></div>
@@ -604,7 +601,6 @@ async function refreshBoardScreen(){
     const st=$('#bStrikes'); renderStrikes(st,g.strikes);
     const bd=$('#bBoard'); if(bd)bd.innerHTML=audienceBoardHTML(q,g);
   }
-  const sp=$('#soundPill'); if(sp) sp.textContent=soundLabel();
 }
 
 /* ============================================================ SYNC ============================================================ */
@@ -613,7 +609,7 @@ window.addEventListener('storage',(e)=>{
   if(view==='board') refreshBoardScreen();
   else if(view==='host'&&hostTab==='play') refreshPlay();
 });
-setInterval(()=>{ if(view==='host'){ refreshHostStatus(); if(hostTab==='play') refreshPlay(); } if(view==='board') refreshBoardScreen(); },1500);
+setInterval(()=>{ if(view==='host'){ if(hostTab==='play') refreshPlay(); } if(view==='board') refreshBoardScreen(); },1500);
 
 (async()=>{ await ensureSeed(); const h=(location.hash||'').replace('#',''); view = (h==='board') ? 'board' : 'host'; render(); })();
 </script>
