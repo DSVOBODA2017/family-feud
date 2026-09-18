@@ -295,7 +295,7 @@ let boardSig=''; let bPrevRevealed=0, bPrevStrikes=0;
 function setHash(v){ const base=location.pathname+location.search; try{ history.replaceState(null,'', v==='home'?base:base+'#'+v); }catch(e){} }
 function go(v){ view=v; setHash(v); render(); }
 function openBoardWindow(){ window.open(location.pathname+location.search+'#board','feudBoard','width=1280,height=800'); }
-function render(){ if(view==='home')return renderHome(); if(view==='host')return renderHost(); if(view==='board')return renderBoardScreen(); }
+function render(){ if(view==='board')return renderBoardScreen(); return renderHost(); }
 
 /* ---------------- HOME ---------------- */
 function renderHome(){
@@ -329,7 +329,7 @@ function renderHost(){
     </div>
     <div id="hostContent"></div>
   </div>`;
-  $('#homeLink').onclick=()=>go('home');
+  $('#homeLink').onclick=()=>{ hostTab='questions'; renderHostTab(); };
   $('#openBoard').onclick=openBoardWindow;
   app.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ hostTab=t.dataset.tab; editingId=null; renderHostTab(); });
   renderHostTab();
@@ -503,8 +503,8 @@ async function buildPlay(c){
       <button class="btn" id="awardB">Award pot to <span data-tn="B"></span></button>
     </div>
     <div class="switchrow" style="justify-content:center;margin-top:14px">
-      <input class="txt" id="teamAName" style="max-width:170px" placeholder="Team A name">
-      <input class="txt" id="teamBName" style="max-width:170px" placeholder="Team B name">
+      <input class="txt" id="teamAName" style="max-width:170px" placeholder="Team A name" value="${esc(g.teamA)}">
+      <input class="txt" id="teamBName" style="max-width:170px" placeholder="Team B name" value="${esc(g.teamB)}">
       <button class="btn ghost sm" id="saveTeams">Rename teams</button>
     </div>
     <p class="subtle center" style="margin-top:10px">Someone shouts an answer → tap it if it's on the board. No match → Strike. Tap a revealed card again to undo a misclick.</p>
@@ -521,7 +521,7 @@ async function buildPlay(c){
   $('#resetGame').onclick=async()=>{ const g=await getGame(); g.scoreA=0;g.scoreB=0;g.pot=0;g.revealed=[];g.strikes=0;g.control=null; await setGame(g); refreshPlay(); };
   refreshPlay();
 }
-async function award(team){ const g=await getGame(); if(team==='A')g.scoreA+=g.pot; else g.scoreB+=g.pot; g.pot=0;g.revealed=[];g.strikes=0; await setGame(g); hostSound('ding'); refreshPlay(); }
+async function award(team){ const g=await getGame(); if(team==='A')g.scoreA+=g.pot; else g.scoreB+=g.pot; g.pot=0; await setGame(g); refreshPlay(); }
 async function toggleReveal(i){ const g=await getGame(); const q=(await getQuestions()).find(x=>x.id===g.activeQid); if(!q)return;
   const idx=g.revealed.indexOf(i);
   if(idx>=0){ g.revealed.splice(idx,1); g.pot=Math.max(0,g.pot-q.answers[i].count); sfx.blip(); }
@@ -547,9 +547,6 @@ async function refreshPlay(){
   const sb=$('#scorebar'); if(sb)sb.innerHTML=scorebarHTML(g);
   const st=$('#strikes'); if(st)st.innerHTML='✕'.repeat(g.strikes).split('').map(()=>`<span class="xmark">✕</span>`).join('');
   const bd=$('#board'); if(bd){ bd.innerHTML=hostBoardHTML(q,g); bd.querySelectorAll('.ctrl-card').forEach(s=>s.onclick=()=>toggleReveal(+s.dataset.i)); }
-  const ta=$('#teamAName'),tb=$('#teamBName');
-  if(ta&&document.activeElement!==ta)ta.value=g.teamA;
-  if(tb&&document.activeElement!==tb)tb.value=g.teamB;
   app.querySelectorAll('[data-tn="A"]').forEach(e=>e.textContent=g.teamA);
   app.querySelectorAll('[data-tn="B"]').forEach(e=>e.textContent=g.teamB);
 }
@@ -569,7 +566,6 @@ function renderBoardScreen(){
     <div id="soundHint" style="text-align:center;margin:6px 0 -6px;color:var(--ink-dim);font-size:13px">🔊 Click anywhere once to turn on sound for this screen.</div>
     <div id="boardContent"></div>
   </div>`;
-  $('#homeLink').onclick=()=>go('home');
   boardSig=''; refreshBoardScreen();
 }
 async function refreshBoardScreen(){
@@ -610,7 +606,7 @@ window.addEventListener('storage',(e)=>{
 });
 setInterval(()=>{ if(view==='host'){ refreshHostStatus(); if(hostTab==='play') refreshPlay(); } if(view==='board') refreshBoardScreen(); },1500);
 
-(async()=>{ await ensureSeed(); const h=(location.hash||'').replace('#',''); if(h==='board'||h==='host')view=h; render(); })();
+(async()=>{ await ensureSeed(); const h=(location.hash||'').replace('#',''); view = (h==='board') ? 'board' : 'host'; render(); })();
 </script>
 </body>
 </html>
