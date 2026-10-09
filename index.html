@@ -180,8 +180,38 @@ function freshGame(){ return { activeQid:null, mode:'idle', revealed:[], strikes
   scoreA:0, scoreB:0, pot:0, teamA:'Team Blue', teamB:'Team Gold', control:null, flash:0 }; }
 async function getGame(){ return (await store.get(K_GAME))||freshGame(); }
 async function setGame(g){ await store.set(K_GAME,g); }
-async function getQuestions(){ return (await store.get(K_QUESTIONS))||[]; }
-async function setQuestions(q){ await store.set(K_QUESTIONS,q); }
+/* ---------- shared question library via Google Sheets ----------
+   Paste your Apps Script Web App URL (ends in /exec) between the quotes below.
+   Leave it empty ('') to keep questions local to this browser only. */
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyPrHFLWQaT4tushapvjhgYsCR8rfGReiUxN-ajEsUJca38nCtyAaXJr5yhohUPnwIP/exec';
+
+let qCache = null;                 // in-memory copy; gameplay reads this (fast, no network)
+let pushPending = false, pushTimer = null;
+function qLocalGet(){ try{ const v=localStorage.getItem(K_QUESTIONS); return v?JSON.parse(v):null; }catch(e){ return null; } }
+function qLocalSet(q){ try{ localStorage.setItem(K_QUESTIONS, JSON.stringify(q)); }catch(e){} }
+async function pullQuestions(){                    // read the shared library from the sheet
+  if(!SHEET_URL) return null;
+  try{ const res=await fetch(SHEET_URL,{method:'GET'}); if(!res.ok) return null;
+    const data=await res.json();
+    if(Array.isArray(data)){ qCache=data; qLocalSet(data); return data; } }catch(e){}
+  return null;
+}
+function pushQuestions(q){                          // save the library back to the sheet (debounced)
+  if(!SHEET_URL) return;
+  clearTimeout(pushTimer); pushPending=true;
+  pushTimer=setTimeout(()=>{
+    fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({questions:q})})
+      .catch(()=>{}).finally(()=>{ pushPending=false; });
+  },400);
+}
+async function getQuestions(){ if(qCache) return qCache; const l=qLocalGet(); if(l){ qCache=l; return l; } return []; }
+async function setQuestions(q){ qCache=q; qLocalSet(q); pushQuestions(q); }
+function startQuestionSync(){ if(!SHEET_URL) return;
+  setInterval(async()=>{ if(pushPending) return;
+    const before=JSON.stringify(qCache); const pulled=await pullQuestions();
+    if(pulled && JSON.stringify(pulled)!==before && view==='host' && hostTab==='questions' && !editingId) drawQList();
+  },12000);
+}
 
 /* ---------- preloaded sample boards (play instantly, no key needed) ---------- */
 const SAMPLES = [
@@ -644,7 +674,7 @@ window.addEventListener('storage',(e)=>{
 });
 setInterval(()=>{ if(view==='host'){ if(hostTab==='play') refreshPlay(); } if(view==='board') refreshBoardScreen(); },1500);
 
-(async()=>{ await ensureSeed(); const h=(location.hash||'').replace('#',''); view = (h==='board') ? 'board' : 'host'; render(); })();
+(async()=>{ await pullQuestions(); await ensureSeed(); const h=(location.hash||'').replace('#',''); view = (h==='board') ? 'board' : 'host'; render(); startQuestionSync(); })();
 </script>
 </body>
 </html>
