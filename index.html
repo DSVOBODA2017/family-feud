@@ -133,9 +133,26 @@
     background:linear-gradient(180deg,var(--gold),var(--gold-deep));color:#241a00;border-radius:14px;padding:10px}
   .pot .lbl{font-size:11px;font-weight:800;letter-spacing:.08em}
   .pot .val{font-family:var(--display);font-size:40px;line-height:1}
+
+  /* host team control grid — name is typed into the card, live-syncs to the board */
+  .teamgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;max-width:760px;margin:0 auto 16px;align-items:stretch}
+  .teamgrid>button{width:100%}
+  .tcard{display:flex;flex-direction:column;gap:8px;background:rgba(0,0,0,.22);border:1px solid #2f52c0;border-radius:14px;padding:12px}
+  .tcard.control{outline:2px solid var(--gold)}
+  .tcard .tname{background:#0b1a4e;border:1px solid #2f52c0;color:var(--ink);border-radius:10px;padding:9px 10px;font-size:14px;text-align:center;outline:none;width:100%}
+  .tcard .tname:focus{border-color:var(--gold)}
+  .tcard .score{font-family:var(--display);font-size:38px;color:var(--gold);text-shadow:0 2px 0 var(--gold-deep);line-height:1;text-align:center}
+  .tcard .ctl{font-size:10px;color:var(--gold);letter-spacing:.05em;font-weight:800;text-align:center}
+  .pcard{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:linear-gradient(180deg,var(--gold),var(--gold-deep));color:#241a00;border-radius:14px;padding:12px}
+  .pcard .lbl{font-size:11px;font-weight:800;letter-spacing:.08em}
+  .pcard .val{font-family:var(--display);font-size:38px;line-height:1}
   .strikes{display:flex;justify-content:center;gap:16px;min-height:70px;align-items:center;margin:6px 0 18px}
   .xmark{font-family:var(--display);font-size:56px;color:var(--red);text-shadow:0 3px 0 #8f221d;animation:pop .25s ease}
   @keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
+  /* big "WRONG" flash shown on the board when a steal is missed */
+  .flashx{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:60}
+  .flashx span{font-family:var(--display);font-size:min(60vh,60vw);line-height:1;color:var(--red);text-shadow:0 8px 0 #8f221d;animation:flashpop 1.2s ease forwards}
+  @keyframes flashpop{0%{transform:scale(.2);opacity:0}15%{transform:scale(1);opacity:1}72%{transform:scale(1);opacity:1}100%{transform:scale(1.08);opacity:0}}
 
   .row-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px}
   .switchrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
@@ -160,7 +177,7 @@ const store = {
 const K_QUESTIONS='feud:questions', K_GAME='feud:game', K_KEY='feud:apikey';
 
 function freshGame(){ return { activeQid:null, mode:'idle', revealed:[], strikes:0,
-  scoreA:0, scoreB:0, pot:0, teamA:'Team Blue', teamB:'Team Gold', control:null }; }
+  scoreA:0, scoreB:0, pot:0, teamA:'Team Blue', teamB:'Team Gold', control:null, flash:0 }; }
 async function getGame(){ return (await store.get(K_GAME))||freshGame(); }
 async function setGame(g){ await store.set(K_GAME,g); }
 async function getQuestions(){ return (await store.get(K_QUESTIONS))||[]; }
@@ -290,7 +307,7 @@ function soundLabel(){ const d=sampleOK['ding'], b=sampleOK['buzz'];
 let view='home';        // home | host | board
 let hostTab='questions'; // questions | play
 let editingId=null; let editRows=[];
-let boardSig=''; let bPrevRevealed=0, bPrevStrikes=0;
+let boardSig=''; let bPrevRevealed=0, bPrevStrikes=0, bLastFlash=0;
 
 function setHash(v){ const base=location.pathname+location.search; try{ history.replaceState(null,'', v==='home'?base:base+'#'+v); }catch(e){} }
 function go(v){ view=v; setHash(v); render(); }
@@ -481,36 +498,44 @@ async function buildPlay(c){
   c.innerHTML=`
   <div class="panel">
     <div class="board-head"><div class="q">${esc(q.text)}</div></div>
-    <div class="scorebar" id="scorebar"></div>
-    <div class="row-actions" style="margin-top:-8px;margin-bottom:8px"><button class="btn ghost sm" id="resetGame">Reset scores</button></div>
+    <div class="teamgrid">
+      <button class="btn ghost" id="ctlA">Board Control</button>
+      <div></div>
+      <button class="btn ghost" id="ctlB">Board Control</button>
+      <div class="tcard" id="tcardA">
+        <input class="tname" id="teamAName" placeholder="Team A name" maxlength="18" autocomplete="off" value="${esc(g.teamA)}">
+        <div class="score mono" id="scoreA">0</div>
+        <div class="ctl" id="ctlLabelA" style="visibility:hidden">▸ in control</div>
+      </div>
+      <div class="pcard"><div class="lbl">Points</div><div class="val mono" id="potVal">0</div></div>
+      <div class="tcard" id="tcardB">
+        <input class="tname" id="teamBName" placeholder="Team B name" maxlength="18" autocomplete="off" value="${esc(g.teamB)}">
+        <div class="score mono" id="scoreB">0</div>
+        <div class="ctl" id="ctlLabelB" style="visibility:hidden">▸ in control</div>
+      </div>
+      <button class="btn" id="awardA">Award points to Team</button>
+      <button class="btn ghost" id="resetGame">Reset scores</button>
+      <button class="btn" id="awardB">Award points to Team</button>
+    </div>
     <div class="strikes" id="strikes"></div>
     <p class="subtle center" style="margin-bottom:10px">Only you see these answers. Tap one to reveal it on the board screen the room is watching.</p>
-    <div class="ctrl-board" id="board"></div>
-    <div class="row-actions" style="margin-top:18px">
+    <div class="row-actions" style="margin-bottom:4px">
       <button class="btn red" id="strikeBtn">Strike ✕</button>
       <button class="btn ghost sm" id="clrStrike">Clear strikes</button>
       <button class="btn ghost sm" id="clrBoard">Clear board</button>
       <button class="btn ghost sm" id="revealAll">Reveal all</button>
     </div>
-    <div class="switchrow" style="justify-content:center;margin-top:14px">
-      <span class="subtle">Board control:</span>
-      <button class="btn ghost sm" id="ctlA">Give to <span data-tn="A"></span></button>
-      <button class="btn ghost sm" id="ctlB">Give to <span data-tn="B"></span></button>
-    </div>
-    <div class="row-actions" style="margin-top:8px">
-      <button class="btn" id="awardA">Award pot to <span data-tn="A"></span></button>
-      <button class="btn" id="awardB">Award pot to <span data-tn="B"></span></button>
-    </div>
-    <div class="switchrow" style="justify-content:center;margin-top:14px">
-      <input class="txt" id="teamAName" style="max-width:170px" placeholder="Team A name" value="${esc(g.teamA)}">
-      <input class="txt" id="teamBName" style="max-width:170px" placeholder="Team B name" value="${esc(g.teamB)}">
-      <button class="btn ghost sm" id="saveTeams">Rename teams</button>
-    </div>
-    <p class="subtle center" style="margin-top:10px">Someone shouts an answer → tap it if it's on the board. No match → Strike. Tap a revealed card again to undo a misclick.</p>
+    <div class="ctrl-board" id="board" style="margin-top:14px"></div>
+    <p class="subtle center" style="margin-top:12px">Someone shouts an answer → tap it if it's on the board. No match → Strike. Tap a revealed card again to undo a misclick.</p>
   </div>`;
-  $('#strikeBtn').onclick=async()=>{ const g=await getGame(); if(g.strikes<3){ g.strikes++;
-    if(g.strikes===3 && (g.control==='A'||g.control==='B')) g.control = g.control==='A'?'B':'A';
-    await setGame(g); hostSound('buzz'); refreshPlay(); } };
+  $('#strikeBtn').onclick=async()=>{ const g=await getGame();
+    if(g.strikes<3){ g.strikes++;
+      if(g.strikes===3 && (g.control==='A'||g.control==='B')) g.control = g.control==='A'?'B':'A';  // 3rd strike = steal
+      await setGame(g); hostSound('buzz'); refreshPlay();
+    } else { /* already at 3 = missed steal: flash WRONG on the board, hand control back to the other team */
+      if(g.control==='A'||g.control==='B') g.control = g.control==='A'?'B':'A';
+      g.flash=Date.now(); await setGame(g); hostSound('buzz'); refreshPlay();
+    } };
   $('#clrStrike').onclick=async()=>{ const g=await getGame(); g.strikes=0; await setGame(g); refreshPlay(); };
   $('#clrBoard').onclick=async()=>{ const g=await getGame(); g.revealed=[]; g.pot=0; g.strikes=0; await setGame(g); refreshPlay(); };
   $('#revealAll').onclick=async()=>{ const g=await getGame(); const qq=(await getQuestions()).find(x=>x.id===g.activeQid);
@@ -518,7 +543,9 @@ async function buildPlay(c){
   $('#awardA').onclick=()=>award('A'); $('#awardB').onclick=()=>award('B');
   $('#ctlA').onclick=async()=>{ const g=await getGame(); g.control='A'; await setGame(g); refreshPlay(); };
   $('#ctlB').onclick=async()=>{ const g=await getGame(); g.control='B'; await setGame(g); refreshPlay(); };
-  $('#saveTeams').onclick=async()=>{ const g=await getGame(); g.teamA=$('#teamAName').value.trim()||g.teamA; g.teamB=$('#teamBName').value.trim()||g.teamB; await setGame(g); refreshPlay(); };
+  // team names are typed straight into the cards; every keystroke syncs to the board, no save needed
+  $('#teamAName').oninput=async()=>{ const g=await getGame(); g.teamA=$('#teamAName').value; await setGame(g); };
+  $('#teamBName').oninput=async()=>{ const g=await getGame(); g.teamB=$('#teamBName').value; await setGame(g); };
   $('#resetGame').onclick=async()=>{ const g=await getGame(); g.scoreA=0;g.scoreB=0;g.pot=0;g.revealed=[];g.strikes=0;g.control=null; await setGame(g); refreshPlay(); };
   refreshPlay();
 }
@@ -528,10 +555,10 @@ async function toggleReveal(i){ const g=await getGame(); const q=(await getQuest
   if(idx>=0){ g.revealed.splice(idx,1); g.pot=Math.max(0,g.pot-q.answers[i].count); sfx.blip(); }
   else { g.revealed.push(i); g.pot+=q.answers[i].count; hostSound('ding'); }
   await setGame(g); refreshPlay(); }
-function scorebarHTML(g){ return `
-  <div class="team ${g.control==='A'?'control':''}"><div class="name">${esc(g.teamA)}${g.control==='A'?' <span class="ctl">▸ in control</span>':''}</div><div class="score mono">${g.scoreA}</div></div>
+function scorebarHTML(g){ const nA=esc(g.teamA)||'&nbsp;', nB=esc(g.teamB)||'&nbsp;'; return `
+  <div class="team ${g.control==='A'?'control':''}"><div class="name">${nA}${g.control==='A'?' <span class="ctl">▸ in control</span>':''}</div><div class="score mono">${g.scoreA}</div></div>
   <div class="pot"><div class="lbl">Points</div><div class="val mono">${g.pot}</div></div>
-  <div class="team ${g.control==='B'?'control':''}"><div class="name">${esc(g.teamB)}${g.control==='B'?' <span class="ctl">▸ in control</span>':''}</div><div class="score mono">${g.scoreB}</div></div>`; }
+  <div class="team ${g.control==='B'?'control':''}"><div class="name">${nB}${g.control==='B'?' <span class="ctl">▸ in control</span>':''}</div><div class="score mono">${g.scoreB}</div></div>`; }
 function audienceBoardHTML(q,g){ return q.answers.map((a,i)=>{ const open=g.revealed.includes(i);
   return `<div class="slot ${open?'open':''}"><div class="inner">
     <div class="face front"><span class="num">${i+1}</span></div>
@@ -552,11 +579,15 @@ function renderStrikes(el,n){ if(!el) return; const cur=el.childElementCount; if
 async function refreshPlay(){
   if(view!=='host'||hostTab!=='play') return;
   const g=await getGame(); const q=(await getQuestions()).find(x=>x.id===g.activeQid); if(!q) return;
-  const sb=$('#scorebar'); if(sb)sb.innerHTML=scorebarHTML(g);
-  const st=$('#strikes'); renderStrikes(st,g.strikes);
+  const sa=$('#scoreA'); if(sa)sa.textContent=g.scoreA;
+  const sbx=$('#scoreB'); if(sbx)sbx.textContent=g.scoreB;
+  const pv=$('#potVal'); if(pv)pv.textContent=g.pot;
+  const ta=$('#tcardA'); if(ta)ta.classList.toggle('control',g.control==='A');
+  const tb=$('#tcardB'); if(tb)tb.classList.toggle('control',g.control==='B');
+  const la=$('#ctlLabelA'); if(la)la.style.visibility=g.control==='A'?'visible':'hidden';
+  const lb=$('#ctlLabelB'); if(lb)lb.style.visibility=g.control==='B'?'visible':'hidden';
+  renderStrikes($('#strikes'),g.strikes);
   const bd=$('#board'); if(bd){ bd.innerHTML=hostBoardHTML(q,g); bd.querySelectorAll('.ctrl-card').forEach(s=>s.onclick=()=>toggleReveal(+s.dataset.i)); }
-  app.querySelectorAll('[data-tn="A"]').forEach(e=>e.textContent=g.teamA);
-  app.querySelectorAll('[data-tn="B"]').forEach(e=>e.textContent=g.teamB);
 }
 async function refreshHostStatus(){ const el=$('#hostStatus'); if(!el)return; const g=await getGame();
   el.innerHTML = (g.mode==='play' ? 'Round live' : 'Ready') + ' · <span class="subtle">'+soundLabel()+'</span>'; }
@@ -574,6 +605,7 @@ function renderBoardScreen(){
   </div>`;
   boardSig=''; refreshBoardScreen();
 }
+function showBoardFlash(){ const el=document.createElement('div'); el.className='flashx'; const s=document.createElement('span'); s.textContent='✕'; el.appendChild(s); document.body.appendChild(el); setTimeout(()=>{try{el.remove();}catch(e){}},1300); }
 async function refreshBoardScreen(){
   if(view!=='board')return;
   beat();
@@ -581,7 +613,7 @@ async function refreshBoardScreen(){
   const sig=`${g.mode}|${g.activeQid}`; const c=$('#boardContent'); if(!c)return;
   if(sig!==boardSig){
     boardSig=sig;
-    bPrevRevealed=(g.revealed||[]).length; bPrevStrikes=g.strikes||0;   // baseline: no sound on (re)load
+    bPrevRevealed=(g.revealed||[]).length; bPrevStrikes=g.strikes||0; bLastFlash=g.flash||0;   // baseline: no sound/flash on (re)load
     if(g.mode==='play'&&q){
       c.innerHTML=`<div class="panel">
         <div class="board-head"><div class="q">${esc(q.text)}</div></div>
@@ -597,6 +629,7 @@ async function refreshBoardScreen(){
       if(g.strikes>bPrevStrikes) sfx.buzz();
     }
     bPrevRevealed=g.revealed.length; bPrevStrikes=g.strikes;
+    if(g.flash && g.flash!==bLastFlash){ bLastFlash=g.flash; if(audioUnlocked) sfx.buzz(); showBoardFlash(); }
     const sc=$('#bScore'); if(sc)sc.innerHTML=scorebarHTML(g);
     const st=$('#bStrikes'); renderStrikes(st,g.strikes);
     const bd=$('#bBoard'); if(bd)bd.innerHTML=audienceBoardHTML(q,g);
